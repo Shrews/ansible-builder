@@ -8,10 +8,14 @@ jobs:
   secrets_preflight:
     runs-on: ubuntu-20.04
     name: Secrets pre-flight check
+    env:
+      secret_user: ${{ secrets.RH_REGISTRY_USER }}
+      secret_pass: ${{ secrets.RH_REGISTRY_PASSWORD }}
     steps:
       - id: has_secrets
+        if: ${{ env.secret_user != '' && env.secret_pass != '' }}
         run: |
-          echo "::set-output name=has_secrets::${{ secrets.RH_REGISTRY_USER && secrets.RH_REGISTRY_PASSWORD }}"
+          echo "::set-output name=has_secrets::${{ true }}"
     outputs:
       has_secrets: ${{ steps.has_secrets.outputs.has_secrets }}
 
@@ -23,7 +27,6 @@ jobs:
     # so forks will need to define the secrets locally to run these tests pre-merge
     needs: secrets_preflight
     if: needs.secrets_preflight.outputs.has_secrets == 'true'
-
     env:
       TOXENV: ${{ matrix.py_version.tox_env }}
 
