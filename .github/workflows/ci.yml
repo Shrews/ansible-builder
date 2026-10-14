@@ -19,7 +19,7 @@ jobs:
 
     runs-on: ubuntu-latest
 
-    timeout-minutes: 1
+    timeout-minutes: 2
 
     defaults:
       run:
@@ -30,12 +30,39 @@ jobs:
       # NOTE: inaccessible when passing inputs to reusable workflows.
       upstream-repository-id: ${{ env.UPSTREAM_REPOSITORY_ID }}
       is-debug-mode: ${{ toJSON(runner.debug == '1') }}
+      cache-key-files: >-
+        ${{ steps.calc-cache-key-files.outputs.files-hash-key }}
 
     steps:
-    - name: No-op so that the computations can happen in the outputs
-      if: fromJSON(false)
+    # NOTE: `hashFiles()` resolves paths against `GITHUB_WORKSPACE`, so the
+    # NOTE: sources must be present for it to return anything but an empty
+    # NOTE: string. The reusable-workflow callers below have no checkout of
+    # NOTE: their own, which is why the hash is computed here and passed in.
+    - name: Check out src from Git
+      uses: actions/checkout@v5
+      with:
+        fetch-depth: 1
+    - name: >-
+        Calculate dependency files' combined hash value
+        for use in the cache key
+      id: calc-cache-key-files
       run: |
-        print('No-op')
+        from os import environ
+        from pathlib import Path
+
+        FILE_APPEND_MODE = 'a'
+
+        with Path(environ['GITHUB_OUTPUT']).open(
+                mode=FILE_APPEND_MODE,
+        ) as outputs_file:
+            print(
+                "files-hash-key=${{
+                    hashFiles(
+                      'pyproject.toml', 'tox.ini', 'requirements/*.txt'
+                    )
+                }}",
+                file=outputs_file,
+            )
 
   sanity:
     name: 🧹 Linters${{ '' }}  # nest jobs under the same sidebar category
@@ -57,7 +84,8 @@ jobs:
 
     uses: tox-dev/workflow/.github/workflows/reusable-tox.yml@1bb961580e20073f66ccb9024f248357f8c8fecb  # yamllint disable-line rule:line-length
     with:
-      cache-key-for-dependency-files:  # FIXME
+      cache-key-for-dependency-files: >-
+        ${{ needs.pre-setup.outputs.cache-key-files }}
       check-name: >-
         ${{ matrix.toxenv }}
         under 🐍${{ matrix.python-version }}
@@ -113,7 +141,8 @@ jobs:
 
     uses: tox-dev/workflow/.github/workflows/reusable-tox.yml@1bb961580e20073f66ccb9024f248357f8c8fecb  # yamllint disable-line rule:line-length
     with:
-      cache-key-for-dependency-files:  # FIXME
+      cache-key-for-dependency-files: >-
+        ${{ needs.pre-setup.outputs.cache-key-files }}
       check-name: >-
         ${{ matrix.toxenv }}
         under 🐍${{ matrix.python-version }}
