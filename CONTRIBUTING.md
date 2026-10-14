@@ -24,6 +24,48 @@ Inside of a virtual environment, simply run:
   (ansible-builder) $ pip install -e .
 ```
 
+## Managing Dependencies
+
+All dependencies are declared in a single place, `pyproject.toml`:
+
+- runtime dependencies in `[project]` `dependencies`
+- development dependencies in `[dependency-groups]`, split into the `test`,
+  `lint`, and `docs` groups (plus a `dev` group that includes all three)
+
+Those specs are deliberately abstract. The exact versions live in the lock
+files under `requirements/`, which are generated and **must not** be edited by
+hand. They are universal resolutions: a single file carries environment
+markers covering every supported Python, so the same lock is correct on 3.11
+through 3.15.
+
+After changing anything in `[dependency-groups]` or `[project] dependencies`,
+regenerate the locks:
+
+```bash
+  (ansible-builder) $ tox -e lock
+```
+
+That preserves existing pins and resolves only what changed. To refresh
+everything to the newest allowed versions instead:
+
+```bash
+  (ansible-builder) $ tox -e lock -- --upgrade
+```
+
+A full refresh is also needed whenever the supported Python range changes,
+because Dependabot bumps pins in place and cannot add or remove a
+version-conditional entry.
+
+Locking resolves from the `requires-python` floor, so `uv` needs that
+interpreter available. Install it once with:
+
+```bash
+  (ansible-builder) $ uv python install 3.11
+```
+
+Without it, `uv` falls back to whichever Python it finds and silently skews
+the resolution.
+
 ## Linting, Unit, and Integration Tests
 
 `tox` is used to run code linting (`flake8`, `yamllint`, and `mypy`), and to invoke
